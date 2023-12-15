@@ -1,0 +1,236 @@
+#!/usr/bin/env python
+# coding: utf-8
+
+# In[1]:
+
+
+import tkinter as tk
+from tkinter import ttk
+from sklearn.model_selection import train_test_split
+from sklearn.naive_bayes import GaussianNB
+from sklearn.tree import DecisionTreeClassifier
+from sklearn.ensemble import RandomForestClassifier
+from sklearn.metrics import accuracy_score
+from sklearn.dummy import DummyClassifier
+from scipy.stats import f_oneway
+import pandas as pd
+import tkinter.filedialog as filedialog  # 이 부분을 추가
+import numpy as np
+import matplotlib.pyplot as plt
+from sklearn.model_selection import learning_curve
+
+class MachineLearningApp:
+    def __init__(self, root):
+        self.root = root
+        self.root.title("카페 매출 예상하기")
+
+        self.algorithm_label = ttk.Label(root, text="적용할 알고리즘을 선택하세요.")
+        self.algorithm_label.grid(row=0, column=0, padx=10, pady=10, sticky=tk.W)
+
+        self.algorithm_var = tk.StringVar()
+        self.algorithm_combobox = ttk.Combobox(root, textvariable=self.algorithm_var, values=['one_rule','naive_bayes', 'decision_tree', 'random_forest'])
+        self.algorithm_combobox.grid(row=0, column=1, padx=10, pady=10, sticky=tk.W)
+
+        self.browse_button = ttk.Button(root, text="파일 찾기", command=self.load_data)
+        self.browse_button.grid(row=1, column=0, padx=10, pady=10, sticky=tk.W)
+
+        self.predict_button = ttk.Button(root, text="적용", command=self.predict)
+        self.predict_button.grid(row=1, column=1, padx=10, pady=10, sticky=tk.W)
+
+        self.accuracy_label = ttk.Label(root, text="정확도")
+        self.accuracy_label.grid(row=2, column=0, padx=10, pady=10, sticky=tk.W)
+
+        self.accuracy_var = tk.StringVar()
+        self.accuracy_entry = ttk.Entry(root, textvariable=self.accuracy_var, state='readonly')
+        self.accuracy_entry.grid(row=2, column=1, padx=10, pady=10, sticky=tk.W)
+
+        self.prediction_label = ttk.Label(root, text="예측값")
+        self.prediction_label.grid(row=3, column=0, padx=10, pady=10, sticky=tk.W)
+
+        self.prediction_var = tk.StringVar()
+        self.prediction_entry = ttk.Entry(root, textvariable=self.prediction_var, state='readonly')
+        self.prediction_entry.grid(row=3, column=1, padx=10, pady=10, sticky=tk.W)
+        
+        self.prediction_label = ttk.Label(root, text="MON : 1\nTUE : 2\nWED : 3\nTHU : 4\nFRI : 5", justify='center')
+        self.prediction_label.grid(row=5, column=2, padx=10, pady=10, sticky=tk.W)
+
+        self.prediction_label = ttk.Label(root, text="Yes : 1\nNo : 0",justify='center')
+        self.prediction_label.grid(row=6, column=2, padx=10, pady=10, sticky=tk.W)
+
+        self.prediction_label = ttk.Label(root, text="Yes : 1\nNo : 0", justify='center')
+        self.prediction_label.grid(row=10, column=2, padx=10, pady=10, sticky=tk.W)
+
+        self.prediction_label = ttk.Label(root, text="Yes : 1\nNo : 0", justify='center')
+        self.prediction_label.grid(row=11, column=2, padx=10, pady=10, sticky=tk.W)
+        
+        self.clear_button = ttk.Button(root, text="초기화", command=self.clear_inputs)
+        self.clear_button.grid(row=1, column=2, padx=10, pady=10, sticky=tk.W)
+
+        self.entry_labels = []
+        self.entry_vars = []
+        
+
+        self.file_path = ""
+        
+
+    def load_data(self):
+        self.file_path = filedialog.askopenfilename(filetypes=[('CSV Files', '*.csv')])
+        print(f"파일 찾기: {self.file_path}")
+    
+    def clear_inputs(self):
+        # 초기화 버튼이 눌렸을 때 호출되는 함수
+        self.algorithm_var.set("")  # 알고리즘 선택 초기화
+        self.file_path = ""  # 파일 경로 초기화
+        self.accuracy_var.set("")  # 정확도 엔트리 초기화
+        self.prediction_var.set("")  # 예측값 엔트리 초기화
+
+        # 입력 엔트리 초기화
+        for entry_var in self.entry_vars:
+            entry_var.set("")
+            
+        
+
+    
+    def learning_curve_plot(self, model, X, y):
+        train_sizes, train_scores, test_scores = learning_curve(
+            model, X, y, cv=5, scoring='accuracy', train_sizes=np.linspace(0.1, 1.0, 10)
+        )
+
+       
+        scores_mean = np.mean(test_scores, axis=1)
+        algorithm_name = self.algorithm_var.get()
+        
+        plt.figure(figsize=(10, 6))
+        plt.plot(train_sizes, scores_mean,label = f' {algorithm_name}')
+       
+        plt.xlabel('Training Set Size')
+        plt.ylabel('Accuracy')
+        plt.title('Learning Curve')
+        
+        # 알고리즘의 이름을 가져와서 그래프 제목으로 설정
+        algorithm_name = self.algorithm_var.get()
+        plt.title(f'Learning Curve - {algorithm_name}')
+        
+        plt.legend()
+        plt.show()
+        
+        
+    
+    
+    def predict(self):
+        if not self.file_path:
+            print("CSV파일을 선택해주세요.")
+            return
+        
+        print("===========================================================================\n")
+        
+        algorithm = self.algorithm_var.get()
+
+       
+        data = pd.read_csv(self.file_path)
+
+        
+        X = data.drop('Sales', axis=1)
+        y = data['Sales']
+
+        
+        X = pd.get_dummies(X)
+
+        
+        X_train, X_test, y_train, y_test = train_test_split(X, y, test_size=0.2, random_state=42)
+        
+        # ANOVA
+        self.anova(X_train, y_train)
+
+        
+        test_data = {}
+        for i, feature in enumerate(X.columns):
+            value = float(self.entry_vars[i].get())
+            test_data[feature] = [value]
+
+        new_data_df = pd.DataFrame(test_data)
+
+        
+        model = self.train_classifier(X_train, y_train, algorithm)
+        
+        
+        self.learning_curve_plot(model, X_train, y_train)
+
+        
+        prediction = model.predict(new_data_df)
+
+        
+        self.prediction_var.set(prediction[0])
+
+        
+        y_pred = model.predict(X_test)
+        accuracy = accuracy_score(y_test, y_pred)
+
+        
+        self.accuracy_var.set(f"{accuracy:.4f}")
+        
+        self.root.wait_window(self.root)
+        
+    def anova(self, X, y):
+        
+        y = pd.get_dummies(y, drop_first=True)
+        
+        
+        X = pd.get_dummies(X)
+
+        for column in X.columns:
+            categories = X[column].unique()
+            anova_result = f_oneway(*[y[X[column] == category] for category in categories])
+
+            print(f"ANOVA for {column}:")
+            print(f"   F-statistic: {anova_result.statistic}")
+            print(f"   p-value: {anova_result.pvalue}")
+            print("\n")
+    
+
+    def train_classifier(self, X_train, y_train, algorithm):
+        if algorithm == 'naive_bayes':
+            model = GaussianNB()
+        elif algorithm == 'decision_tree':
+            model = DecisionTreeClassifier()
+        elif algorithm == 'random_forest':
+            model = RandomForestClassifier(n_estimators=100, random_state=42)
+        elif algorithm == 'one_rule':
+            model = DummyClassifier(strategy='most_frequent')
+        else:
+            raise ValueError(f"Invalid algorithm choice '{algorithm}'. Please choose a valid algorithm.")
+
+        model.fit(X_train, y_train)
+        return model
+
+    def create_input_entries(self, features):
+        for i, feature in enumerate(features):
+            label = ttk.Label(self.root, text=f"{feature}:")
+            label.grid(row=4 + i, column=0, padx=10, pady=5, sticky=tk.W)
+            entry_var = tk.StringVar()
+            entry = ttk.Entry(self.root, textvariable=entry_var)
+            entry.grid(row=4 + i, column=1, padx=10, pady=5, sticky=tk.W)
+            self.entry_labels.append(label)
+            self.entry_vars.append(entry_var)
+            
+
+
+if __name__ == "__main__":
+    root = tk.Tk()
+    app = MachineLearningApp(root)
+    features = ['Month', 'Day', 'Holiday', 'Highest_temp', 'Lowest_temp', 'Rainfall', 'Sejong', 'Gwanghwamun']
+    app.create_input_entries(features)
+    root.mainloop()
+
+
+# In[ ]:
+
+
+
+
+
+# In[ ]:
+
+
+
+
